@@ -16,11 +16,16 @@ export function settings(): Setting {
     consumerSecret: process.env.CONSUMER_SECRET || "",
     accessToken: process.env.ACCESS_TOKEN || "",
     accessTokenSecret: process.env.ACCESS_TOKEN_SECRET || "",
-    keepTags: ["Zenn", "keep", "朝活"],
-    exceptionIds: [
-      "1424563468443602945",
-      "1424563468443602945"
+    keepTags: ["Zenn", "keep", "朝活", "RingFitAdventure"],
+    exceptionIds: ["1424563468443602945", "1424563468443602945"],
+    keepTexts: [
+      /Slack/,
+      /Bolt/,
+      /Notion/,
+      /海砂利水魚/,
+      /マイニュー/,
+      /my new/,
+      /gear/,
     ],
-    keepTexts: [/Slack/, /Bolt/, /Notion/, /海砂利水魚/],
   };
 }
