@@ -17,7 +17,11 @@ export function settings(): Setting {
     accessToken: process.env.ACCESS_TOKEN || "",
     accessTokenSecret: process.env.ACCESS_TOKEN_SECRET || "",
     keepTags: ["Zenn", "keep", "朝活", "RingFitAdventure"],
-    exceptionIds: ["1424563468443602945", "1424563468443602945"],
+    exceptionIds: [
+      "1424563468443602945",
+      "1424563468443602945",
+      "1467150465758806019",
+    ],
     keepTexts: [
       /Slack/,
       /Bolt/,
