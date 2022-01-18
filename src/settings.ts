@@ -20,7 +20,6 @@ export function settings(): Setting {
     exceptionIds: [
       "1424563468443602945",
       "1424563468443602945",
-      "1467150465758806019",
     ],
     keepTexts: [
       /Slack/,
