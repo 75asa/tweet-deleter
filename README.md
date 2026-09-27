@@ -30,6 +30,24 @@ $ DRY_RUN=1 npm run start # only log the tweets to delete
 $ npm run start
 ```
 
+## Keep rules
+
+Which tweets to keep is defined in [`keep-rules.json`](./keep-rules.json) at the repo root, not in code:
+
+```json
+{
+  "keepTags": ["Zenn", "keep"],
+  "exceptionIds": ["1234567890123456789"],
+  "keepTexts": ["Zenn", "TypeScript"]
+}
+```
+
+- `keepTags`: hashtags to keep
+- `exceptionIds`: tweet IDs to always keep
+- `keepTexts`: regular expressions (as strings) matched against the tweet text
+
+Edit this file to change the rules (no code change / redeploy needed). The path can be overridden with the `KEEP_RULES_PATH` env var.
+
 ## Usage (GitHub Actions)
 
 1. fork
