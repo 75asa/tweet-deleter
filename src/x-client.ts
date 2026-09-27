@@ -18,6 +18,10 @@ export interface FetchTweetsPage {
 
 export type DeleteTweetResult =
   | { status: "deleted" }
+  // The post (or, for unretweet, the retweet relationship) was already gone
+  // by the time we tried to remove it (HTTP 404). Not an error: something
+  // else (a manual delete, a previous partial run, ...) got there first.
+  | { status: "already_deleted" }
   | { status: "rate_limited"; resetAt: Date }
   | { status: "failed"; error: unknown };
 
@@ -32,12 +36,36 @@ export interface XClient {
   fetchTweetsPage(params: FetchTweetsParams): Promise<FetchTweetsPage>;
   /** `DELETE /2/tweets/:id` */
   deleteTweet(id: string): Promise<DeleteTweetResult>;
+  /**
+   * `DELETE /2/users/:id/retweets/:source_tweet_id` - removes the Retweet
+   * relationship rather than deleting a post. Used instead of `deleteTweet`
+   * for posts that are Retweets (see the `referenced_tweets` check in
+   * index.ts): docs.x.com doesn't document what `DELETE /2/tweets/:id` does
+   * to a Retweet's own id, so we use the endpoint that's documented to be
+   * the right one for undoing a Retweet.
+   */
+  unretweet(userId: string, sourceTweetId: string): Promise<DeleteTweetResult>;
 }
 
 interface UserTweetsResponse {
   data?: Status[];
   meta?: { next_token?: string };
 }
+
+const toDeleteTweetResult = (error: unknown): DeleteTweetResult => {
+  if (error instanceof ApiResponseError) {
+    if (error.code === 404) {
+      return { status: "already_deleted" };
+    }
+    if (error.code === 429 && error.rateLimit) {
+      return {
+        status: "rate_limited",
+        resetAt: new Date(error.rateLimit.reset * 1000),
+      };
+    }
+  }
+  return { status: "failed", error };
+};
 
 export class TwitterApiV2XClient implements XClient {
   #client: TwitterApi;
@@ -59,7 +87,7 @@ export class TwitterApiV2XClient implements XClient {
   async fetchTweetsPage(params: FetchTweetsParams): Promise<FetchTweetsPage> {
     const query: Record<string, string | number> = {
       max_results: 100,
-      "tweet.fields": "created_at,entities",
+      "tweet.fields": "created_at,entities,referenced_tweets",
       end_time: params.endTime,
     };
     if (params.startTime) query.start_time = params.startTime;
@@ -80,17 +108,19 @@ export class TwitterApiV2XClient implements XClient {
       await this.#client.v2.deleteTweet(id);
       return { status: "deleted" };
     } catch (error) {
-      if (
-        error instanceof ApiResponseError &&
-        error.code === 429 &&
-        error.rateLimit
-      ) {
-        return {
-          status: "rate_limited",
-          resetAt: new Date(error.rateLimit.reset * 1000),
-        };
-      }
-      return { status: "failed", error };
+      return toDeleteTweetResult(error);
+    }
+  }
+
+  async unretweet(
+    userId: string,
+    sourceTweetId: string,
+  ): Promise<DeleteTweetResult> {
+    try {
+      await this.#client.v2.unretweet(userId, sourceTweetId);
+      return { status: "deleted" };
+    } catch (error) {
+      return toDeleteTweetResult(error);
     }
   }
 }

@@ -75,18 +75,22 @@ test("keep_by_date", () => {
 class FakeXClient implements XClient {
   pages: FetchTweetsPage[];
   deleteResults: (DeleteTweetResult | (() => DeleteTweetResult))[];
+  unretweetResults: (DeleteTweetResult | (() => DeleteTweetResult))[];
   userId: string;
   fetchCalls: FetchTweetsParams[] = [];
   deleteCalls: string[] = [];
+  unretweetCalls: { userId: string; sourceTweetId: string }[] = [];
   getMyUserIdCalls = 0;
 
   constructor(opts: {
     pages: FetchTweetsPage[];
     deleteResults?: (DeleteTweetResult | (() => DeleteTweetResult))[];
+    unretweetResults?: (DeleteTweetResult | (() => DeleteTweetResult))[];
     userId?: string;
   }) {
     this.pages = opts.pages;
     this.deleteResults = opts.deleteResults ?? [];
+    this.unretweetResults = opts.unretweetResults ?? [];
     this.userId = opts.userId ?? "user-1";
   }
 
@@ -108,6 +112,16 @@ class FakeXClient implements XClient {
     if (!next) return { status: "deleted" };
     return typeof next === "function" ? next() : next;
   }
+
+  async unretweet(
+    userId: string,
+    sourceTweetId: string,
+  ): Promise<DeleteTweetResult> {
+    this.unretweetCalls.push({ userId, sourceTweetId });
+    const next = this.unretweetResults[this.unretweetCalls.length - 1];
+    if (!next) return { status: "deleted" };
+    return typeof next === "function" ? next() : next;
+  }
 }
 
 const noopLogger = { log: () => {} };
@@ -118,6 +132,14 @@ const statusWithId = (id: string, createdAt: Date): Status => ({
   text: `tweet ${id}`,
   entities: {},
   created_at: createdAt.toISOString(),
+});
+
+const retweetOf = (id: string, sourceId: string, createdAt: Date): Status => ({
+  id,
+  text: `RT @someone: tweet ${sourceId}`,
+  entities: {},
+  created_at: createdAt.toISOString(),
+  referenced_tweets: [{ type: "retweeted", id: sourceId }],
 });
 
 test("run: paginates until nextToken is absent", async () => {
@@ -364,4 +386,146 @@ test("run: an unexpected delete failure throws (caller should exit 1)", async ()
   await assert.rejects(() =>
     run({ client, setting, logger: noopLogger, sleep: noopSleep }),
   );
+});
+
+test("run: a 404 (already deleted) is skipped, not counted as deleted, and the run continues", async () => {
+  const old = new Date("2020-01-01T00:00:00.000Z");
+  const client = new FakeXClient({
+    pages: [{ tweets: [statusWithId("1", old), statusWithId("2", old)] }],
+    deleteResults: [{ status: "already_deleted" }, { status: "deleted" }],
+  });
+  const setting: Setting = { ...baseSetting };
+  const logs: string[] = [];
+
+  const summary = await run({
+    client,
+    setting,
+    logger: { log: (m) => logs.push(m) },
+    sleep: noopSleep,
+  });
+
+  assert.deepEqual(client.deleteCalls, ["1", "2"]);
+  assert.equal(summary.deletedCount, 1);
+  assert.equal(summary.alreadyDeletedCount, 1);
+  assert.equal(summary.skippedForRateLimit, 0);
+  assert.ok(logs.some((l) => l.includes("ALREADY GONE")));
+});
+
+test("run: removes a Retweet via unretweet(userId, sourceId) instead of DELETE /2/tweets/:id", async () => {
+  const old = new Date("2020-01-01T00:00:00.000Z");
+  const client = new FakeXClient({
+    pages: [{ tweets: [retweetOf("rt-1", "original-1", old)] }],
+    userId: "me-id",
+  });
+  const setting: Setting = { ...baseSetting };
+
+  const summary = await run({
+    client,
+    setting,
+    logger: noopLogger,
+    sleep: noopSleep,
+  });
+
+  assert.equal(client.deleteCalls.length, 0);
+  assert.deepEqual(client.unretweetCalls, [
+    { userId: "me-id", sourceTweetId: "original-1" },
+  ]);
+  assert.equal(summary.deletedCount, 1);
+});
+
+test("run: keepTexts still matches a Retweet's 'RT @...' text and keeps it", async () => {
+  const old = new Date("2020-01-01T00:00:00.000Z");
+  const client = new FakeXClient({
+    pages: [{ tweets: [retweetOf("rt-1", "original-1", old)] }],
+  });
+  const setting: Setting = { ...baseSetting, keepTexts: [/^RT @/] };
+
+  const summary = await run({
+    client,
+    setting,
+    logger: noopLogger,
+    sleep: noopSleep,
+  });
+
+  assert.equal(client.deleteCalls.length, 0);
+  assert.equal(client.unretweetCalls.length, 0);
+  assert.equal(summary.deletedCount, 0);
+});
+
+test("run: a 404 on unretweet is also treated as already-removed", async () => {
+  const old = new Date("2020-01-01T00:00:00.000Z");
+  const client = new FakeXClient({
+    pages: [{ tweets: [retweetOf("rt-1", "original-1", old)] }],
+    unretweetResults: [{ status: "already_deleted" }],
+  });
+  const setting: Setting = { ...baseSetting };
+
+  const summary = await run({
+    client,
+    setting,
+    logger: noopLogger,
+    sleep: noopSleep,
+  });
+
+  assert.equal(summary.deletedCount, 0);
+  assert.equal(summary.alreadyDeletedCount, 1);
+});
+
+test("run: warns when posts are skipped for the MAX_DELETES cap", async () => {
+  const old = new Date("2020-01-01T00:00:00.000Z");
+  const client = new FakeXClient({
+    pages: [{ tweets: [statusWithId("1", old), statusWithId("2", old)] }],
+  });
+  const setting: Setting = { ...baseSetting, maxDeletes: 1 };
+  const logs: string[] = [];
+
+  const summary = await run({
+    client,
+    setting,
+    logger: { log: (m) => logs.push(m) },
+    sleep: noopSleep,
+  });
+
+  assert.equal(summary.skippedForCap, 1);
+  assert.ok(
+    logs.some((l) => l.includes("[WARNING]") && l.includes("full_scan")),
+  );
+});
+
+test("run: dry run also warns when posts would be skipped for the MAX_DELETES cap", async () => {
+  const old = new Date("2020-01-01T00:00:00.000Z");
+  const client = new FakeXClient({
+    pages: [{ tweets: [statusWithId("1", old), statusWithId("2", old)] }],
+  });
+  const setting: Setting = { ...baseSetting, maxDeletes: 1, dryRun: true };
+  const logs: string[] = [];
+
+  await run({
+    client,
+    setting,
+    logger: { log: (m) => logs.push(m) },
+    sleep: noopSleep,
+  });
+
+  assert.ok(
+    logs.some((l) => l.includes("[WARNING]") && l.includes("full_scan")),
+  );
+});
+
+test("run: no warning is logged when nothing is skipped", async () => {
+  const old = new Date("2020-01-01T00:00:00.000Z");
+  const client = new FakeXClient({
+    pages: [{ tweets: [statusWithId("1", old)] }],
+  });
+  const setting: Setting = { ...baseSetting };
+  const logs: string[] = [];
+
+  await run({
+    client,
+    setting,
+    logger: { log: (m) => logs.push(m) },
+    sleep: noopSleep,
+  });
+
+  assert.ok(!logs.some((l) => l.includes("[WARNING]")));
 });
