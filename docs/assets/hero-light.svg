@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-labelledby="pd-title-light">
+  <title id="pd-title-light">post-deleter: automatically delete your old posts on X</title>
+  <defs>
+    <linearGradient id="bg-l" x1="0" y1="0" x2="1280" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#eef4ff"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="400" fill="url(#bg-l)"/>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <rect x="64" y="72" width="248" height="32" rx="16" fill="#e7f0ff" stroke="#bcd6ff"/>
+    <text x="80" y="93" font-size="15" font-weight="600" fill="#0969da">GitHub Actions &#183; runs daily</text>
+
+    <text x="62" y="204" font-size="62" font-weight="800" fill="#0d1117" letter-spacing="-1">post-deleter</text>
+
+    <text x="64" y="252" font-size="23" fill="#3a4552">Automatically delete your old posts</text>
+    <text x="64" y="282" font-size="23" fill="#3a4552">on X &#8212; keep the ones that matter.</text>
+
+    <!-- clock icon: hints at the age threshold -->
+    <g transform="translate(1176,96)">
+      <circle r="36" fill="#ffffff" stroke="#0969da" stroke-width="3"/>
+      <line x1="0" y1="0" x2="0" y2="-20" stroke="#0969da" stroke-width="3" stroke-linecap="round"/>
+      <line x1="0" y1="0" x2="14" y2="8" stroke="#0969da" stroke-width="3" stroke-linecap="round"/>
+      <circle r="2.5" fill="#0969da"/>
+      <line x1="0" y1="-30" x2="0" y2="-33" stroke="#0969da" stroke-width="3" stroke-linecap="round"/>
+      <line x1="0" y1="30" x2="0" y2="33" stroke="#0969da" stroke-width="3" stroke-linecap="round"/>
+      <line x1="-30" y1="0" x2="-33" y2="0" stroke="#0969da" stroke-width="3" stroke-linecap="round"/>
+      <line x1="30" y1="0" x2="33" y2="0" stroke="#0969da" stroke-width="3" stroke-linecap="round"/>
+    </g>
+
+    <!-- motion / sweep hint -->
+    <g stroke="#93b7ee" stroke-width="4" stroke-linecap="round" opacity="0.55">
+      <line x1="700" y1="300" x2="668" y2="284"/>
+      <line x1="712" y1="316" x2="680" y2="300"/>
+      <line x1="724" y1="332" x2="692" y2="316"/>
+    </g>
+
+    <!-- stacked post cards, fading out -->
+    <g>
+      <g transform="translate(756,66)">
+        <rect width="300" height="64" rx="14" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+        <circle cx="26" cy="32" r="13" fill="#cfe0ff" stroke="#8fb8f5"/>
+        <rect x="54" y="21" width="190" height="8" rx="4" fill="#57606a"/>
+        <rect x="54" y="38" width="140" height="7" rx="3.5" fill="#8a97a3"/>
+      </g>
+      <g transform="translate(780,128)" opacity="0.72">
+        <rect width="300" height="64" rx="14" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+        <circle cx="26" cy="32" r="13" fill="#cfe0ff" stroke="#8fb8f5"/>
+        <rect x="54" y="21" width="190" height="8" rx="4" fill="#57606a"/>
+        <rect x="54" y="38" width="140" height="7" rx="3.5" fill="#8a97a3"/>
+      </g>
+      <g transform="translate(804,190)" opacity="0.48">
+        <rect width="300" height="64" rx="14" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+        <circle cx="26" cy="32" r="13" fill="#cfe0ff" stroke="#8fb8f5"/>
+        <rect x="54" y="21" width="190" height="8" rx="4" fill="#57606a"/>
+        <rect x="54" y="38" width="140" height="7" rx="3.5" fill="#8a97a3"/>
+      </g>
+      <g transform="translate(828,252)" opacity="0.28">
+        <rect width="300" height="64" rx="14" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+        <circle cx="26" cy="32" r="13" fill="#cfe0ff" stroke="#8fb8f5"/>
+        <rect x="54" y="21" width="190" height="8" rx="4" fill="#57606a"/>
+        <rect x="54" y="38" width="140" height="7" rx="3.5" fill="#8a97a3"/>
+      </g>
+      <!-- delete mark on the oldest card -->
+      <g transform="translate(1128,252)">
+        <circle r="17" fill="#dc2626"/>
+        <line x1="-7" y1="-7" x2="7" y2="7" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+        <line x1="7" y1="-7" x2="-7" y2="7" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+      </g>
+    </g>
+  </g>
+</svg>
