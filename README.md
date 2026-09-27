@@ -46,6 +46,8 @@ Which tweets to keep is defined in [`keep-rules.json`](./keep-rules.json) at the
 - `exceptionIds`: tweet IDs to always keep
 - `keepTexts`: regular expressions (as strings) matched against the tweet text
 
+All three fields are required (use `[]` for none). The run fails if the file is missing or invalid, so nothing is deleted by mistake.
+
 To keep another post, just edit this file (you can do it from the GitHub web UI). The path can be overridden with the `KEEP_RULES_PATH` env var.
 
 ## Usage (GitHub Actions)
