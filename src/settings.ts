@@ -11,11 +11,7 @@ export interface Setting {
   keepTexts: RegExp[];
 }
 
-interface KeepRules {
-  keepTags: string[];
-  exceptionIds: string[];
-  keepTexts: RegExp[];
-}
+type KeepRules = Pick<Setting, "keepTags" | "exceptionIds" | "keepTexts">;
 
 const DEFAULT_KEEP_RULES_PATH = fileURLToPath(
   new URL("../keep-rules.json", import.meta.url),
