@@ -28,13 +28,22 @@ const DEFAULT_MAX_DELETES = 50;
 // created in that window are still picked up on the next successful run.
 const DEFAULT_LOOKBACK_DAYS = 7;
 
+// An unset/empty value falls back to `fallback`, but any other value that
+// isn't a positive integer is a misconfiguration and must fail loudly rather
+// than silently keep the default (e.g. `MAX_DELETES=0` should not quietly
+// mean "use the default of 50").
 const parsePositiveInt = (
+  envName: string,
   value: string | undefined,
   fallback: number,
 ): number => {
-  if (!value) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  if (value === undefined || value === "") return fallback;
+  if (!/^\d+$/.test(value.trim()) || Number.parseInt(value, 10) <= 0) {
+    throw new Error(
+      `Invalid ${envName}: "${value}" (expected a positive integer)`,
+    );
+  }
+  return Number.parseInt(value, 10);
 };
 
 export function settings(): Setting {
@@ -61,10 +70,15 @@ export function settings(): Setting {
     ],
     userId: process.env.X_USER_ID || undefined,
     lookbackDays: parsePositiveInt(
+      "LOOKBACK_DAYS",
       process.env.LOOKBACK_DAYS,
       DEFAULT_LOOKBACK_DAYS,
     ),
-    maxDeletes: parsePositiveInt(process.env.MAX_DELETES, DEFAULT_MAX_DELETES),
+    maxDeletes: parsePositiveInt(
+      "MAX_DELETES",
+      process.env.MAX_DELETES,
+      DEFAULT_MAX_DELETES,
+    ),
     fullScan: Boolean(process.env.FULL_SCAN),
     dryRun: Boolean(process.env.DRY_RUN),
   };
