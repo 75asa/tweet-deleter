@@ -1,7 +1,6 @@
-import * as Twit from "twit";
-import { Status } from "twitter-d";
-import * as bigInt from "big-integer";
-import { settings } from "./settings";
+import Twit from "twit";
+import type { Status } from "twitter-d";
+import { settings } from "./settings.ts";
 
 export default class TwitterUtil {
   #twitter: Twit;
@@ -28,9 +27,9 @@ export default class TwitterUtil {
       if (statuses.length === 0) {
         break;
       }
-      payload.max_id = bigInt(statuses[statuses.length - 1].id_str)
-        .plus(-1)
-        .toString();
+      payload.max_id = (
+        BigInt(statuses[statuses.length - 1].id_str) - 1n
+      ).toString();
       tweets = tweets.concat(statuses);
     }
     return tweets;
@@ -71,7 +70,7 @@ export default class TwitterUtil {
         }
         seek = status.in_reply_to_status_id_str;
       } catch (error) {
-        const errorStr = error.toString() as string;
+        const errorStr = String(error);
         if (errorStr.includes("Rate limit")) {
           throw new Error("Rate limit exceeded");
         }

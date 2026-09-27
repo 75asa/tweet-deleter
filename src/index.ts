@@ -1,5 +1,5 @@
-import { settings, Setting } from "./settings";
-import TwitterUtil from "./twitter-util";
+import { type Setting, settings } from "./settings.ts";
+import TwitterUtil from "./twitter-util.ts";
 
 export interface Status {
   id_str: string;
@@ -13,7 +13,7 @@ export interface Status {
 export const is消したい = (
   status: Status,
   setting: Setting,
-  boundaryDate: Date
+  boundaryDate: Date,
 ): boolean => {
   const { exceptionIds, keepTags, keepTexts } = setting;
   const {
@@ -45,7 +45,7 @@ const main = async () => {
       now.valueOf() -
         (now.valueOf() % 86400000) -
         86400000 +
-        tokyoTimezoneOffset
+        tokyoTimezoneOffset,
     );
 
     const setting = settings();
@@ -60,7 +60,7 @@ const main = async () => {
 
     if (statusesToDelete.length)
       await twitter.tweet(
-        `【BOT】 ${statusesToDelete.length}個のツイートを削除しました\n${repoUrl}`
+        `【BOT】 ${statusesToDelete.length}個のツイートを削除しました\n${repoUrl}`,
       );
   } catch (error) {
     console.log(error);
@@ -71,6 +71,6 @@ const main = async () => {
   }
 };
 
-if (require.main === module) {
+if (import.meta.main) {
   main();
 }
