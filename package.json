@@ -1,5 +1,5 @@
 {
-  "name": "tweet-deleter",
+  "name": "post-deleter",
   "version": "0.0.0",
   "private": true,
   "description": "Delete your 2 or more days ago tweets Automatically.",
@@ -14,7 +14,7 @@
     "test": "node --test 'src/**/*.test.ts'"
   },
   "repository": {
-    "url": "https://github.com/75asa/tweet-deleter",
+    "url": "https://github.com/75asa/post-deleter",
     "type": "git"
   },
   "author": "takanakahiko<takanakahiko@gmail.com>",
