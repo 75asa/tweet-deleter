@@ -11,7 +11,7 @@ Delete your 2 or more days ago tweets Automatically.
 
 ## Requirements
 
-- Node.js 24 or later
+- Node.js 24.2 or later
 - An X Developer app with Read and Write permission
 
 ## Usage (local)

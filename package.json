@@ -5,7 +5,7 @@
   "description": "Delete your 2 or more days ago tweets Automatically.",
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=24.2"
   },
   "scripts": {
     "check": "biome check .",
