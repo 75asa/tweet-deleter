@@ -51,6 +51,9 @@ $ npm run start
 
 You can also run it manually from the Actions tab with `dry_run` and/or `full_scan` enabled. A run's fetch/delete counts and estimated cost are written to the job summary; the bot no longer posts a completion or error tweet (errors instead fail the workflow run).
 
+> [!TIP]
+> On first use, or after a long pause (posts may have aged out of the `LOOKBACK_DAYS` window, or a run may have skipped some via `MAX_DELETES`/rate limiting), trigger the workflow manually once with `full_scan` enabled to catch up - run with `dry_run` first to check what would be deleted.
+
 ## Development
 
 ```bash
