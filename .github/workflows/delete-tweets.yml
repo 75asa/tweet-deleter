@@ -2,19 +2,35 @@ name: delete-tweets
 
 on:
   schedule:
-    - cron: '0 15 * * *' # UTC0時
+    - cron: "0 15 * * *" # 日本時間 0時（UTC 15時）
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "削除せずに対象をログに出すだけにする"
+        type: boolean
+        default: true
 
-env:
-  CONSUMER_KEY: ${{ secrets.CONSUMER_KEY }}
-  CONSUMER_SECRET: ${{ secrets.CONSUMER_SECRET }}
-  ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-  ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   delete-tweets:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - run: |
-        npm ci
-        npm run start
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - run: npm run start
+        env:
+          CONSUMER_KEY: ${{ secrets.CONSUMER_KEY }}
+          CONSUMER_SECRET: ${{ secrets.CONSUMER_SECRET }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
