@@ -54,10 +54,27 @@ $ npm run start
 
 ## Configuration
 
-<!-- TODO: this section will be filled in as configuration options land (X API v2 env vars such as
-     LOOKBACK_DAYS / FULL_SCAN / MAX_DELETES / X_USER_ID, and a keep-rules.json for keep rules). -->
+### Keep rules
 
-Currently supported environment variables:
+Which posts to keep is defined in [`keep-rules.json`](./keep-rules.json) at the repo root, not in code:
+
+```json
+{
+  "keepTags": ["Zenn", "keep"],
+  "exceptionIds": ["1234567890123456789"],
+  "keepTexts": ["Zenn", "TypeScript"]
+}
+```
+
+- `keepTags`: hashtags to keep
+- `exceptionIds`: post IDs to always keep
+- `keepTexts`: regular expressions (as strings) matched against the post text
+
+All three fields are required (use `[]` for none). The run fails if the file is missing or invalid, so nothing is deleted by mistake.
+
+To keep another post, just edit this file (you can do it from the GitHub web UI).
+
+### Environment variables
 
 | Variable | Description |
 | --- | --- |
@@ -66,6 +83,7 @@ Currently supported environment variables:
 | `ACCESS_TOKEN` | X API access token |
 | `ACCESS_TOKEN_SECRET` | X API access token secret |
 | `DRY_RUN` | When set, only logs the posts that would be deleted |
+| `KEEP_RULES_PATH` | Path to the keep rules file (default: `keep-rules.json` at the repo root) |
 
 ## Development
 
