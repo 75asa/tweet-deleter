@@ -1,17 +1,16 @@
-import * as Twit from "twit";
-import { Status } from "twitter-d";
-import * as bigInt from "big-integer";
-import { settings } from "./settings";
+import Twit from "twit";
+import type { Status } from "twitter-d";
+import type { Setting } from "./settings.ts";
 
 export default class TwitterUtil {
   #twitter: Twit;
 
-  constructor() {
+  constructor(setting: Setting) {
     this.#twitter = new Twit({
-      consumer_key: settings().consumerKey,
-      consumer_secret: settings().consumerSecret,
-      access_token: settings().accessToken,
-      access_token_secret: settings().accessTokenSecret,
+      consumer_key: setting.consumerKey,
+      consumer_secret: setting.consumerSecret,
+      access_token: setting.accessToken,
+      access_token_secret: setting.accessTokenSecret,
     });
   }
 
@@ -28,9 +27,9 @@ export default class TwitterUtil {
       if (statuses.length === 0) {
         break;
       }
-      payload.max_id = bigInt(statuses[statuses.length - 1].id_str)
-        .plus(-1)
-        .toString();
+      payload.max_id = (
+        BigInt(statuses[statuses.length - 1].id_str) - 1n
+      ).toString();
       tweets = tweets.concat(statuses);
     }
     return tweets;
@@ -48,36 +47,5 @@ export default class TwitterUtil {
       id,
     };
     await this.#twitter.post("statuses/destroy/:id", payload);
-  }
-
-  async show(id: string): Promise<Status> {
-    const payload = {
-      id,
-    };
-    const ret = await this.#twitter.get("statuses/show/:id", payload);
-    return ret.data as Status;
-  }
-
-  async isInTree(id: string, rootIds: string[]): Promise<boolean> {
-    let seek = id;
-    for (;;) {
-      if (rootIds.includes(seek)) {
-        return true;
-      }
-      try {
-        const status = await this.show(seek);
-        if (!status.in_reply_to_status_id_str) {
-          break;
-        }
-        seek = status.in_reply_to_status_id_str;
-      } catch (error) {
-        const errorStr = error.toString() as string;
-        if (errorStr.includes("Rate limit")) {
-          throw new Error("Rate limit exceeded");
-        }
-        break;
-      }
-    }
-    return false;
   }
 }

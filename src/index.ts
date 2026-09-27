@@ -1,5 +1,5 @@
-import { settings, Setting } from "./settings";
-import TwitterUtil from "./twitter-util";
+import { type Setting, settings } from "./settings.ts";
+import TwitterUtil from "./twitter-util.ts";
 
 export interface Status {
   id_str: string;
@@ -13,7 +13,7 @@ export interface Status {
 export const is消したい = (
   status: Status,
   setting: Setting,
-  boundaryDate: Date
+  boundaryDate: Date,
 ): boolean => {
   const { exceptionIds, keepTags, keepTexts } = setting;
   const {
@@ -34,8 +34,10 @@ export const is消したい = (
 };
 
 const main = async () => {
-  const repoUrl = "https://github.com/takanakahiko/tweet-deleter";
-  const twitter = new TwitterUtil();
+  const repoUrl = "https://github.com/75asa/tweet-deleter";
+  const dryRun = Boolean(process.env.DRY_RUN);
+  const setting = settings();
+  const twitter = new TwitterUtil(setting);
   try {
     const statuses = await twitter.getAllTweets();
 
@@ -45,14 +47,22 @@ const main = async () => {
       now.valueOf() -
         (now.valueOf() % 86400000) -
         86400000 +
-        tokyoTimezoneOffset
+        tokyoTimezoneOffset,
     );
-
-    const setting = settings();
 
     const statusesToDelete = statuses.filter((status) => {
       return is消したい(status, setting, yesterday0oclock);
     });
+
+    if (dryRun) {
+      for (const status of statusesToDelete) {
+        console.log(`[DRY RUN] ${status.id_str} ${status.full_text}`);
+      }
+      console.log(
+        `[DRY RUN] ${statusesToDelete.length}個のツイートが削除対象です`,
+      );
+      return;
+    }
 
     for (const status of statusesToDelete) {
       await twitter.destroy(status.id_str);
@@ -60,17 +70,17 @@ const main = async () => {
 
     if (statusesToDelete.length)
       await twitter.tweet(
-        `【BOT】 ${statusesToDelete.length}個のツイートを削除しました\n${repoUrl}`
+        `【BOT】 ${statusesToDelete.length}個のツイートを削除しました\n${repoUrl}`,
       );
   } catch (error) {
-    console.log(error);
-    await twitter.tweet(`【BOT】 エラーが発生しました: ${error}`);
-    throw error;
+    console.error(error);
+    process.exitCode = 1;
+    if (!dryRun) await twitter.tweet(`【BOT】 エラーが発生しました: ${error}`);
   } finally {
     process.exit();
   }
 };
 
-if (require.main === module) {
+if (import.meta.main) {
   main();
 }

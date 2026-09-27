@@ -1,32 +1,32 @@
 {
   "name": "tweet-deleter",
   "version": "0.0.0",
-  "description": "my peachy project",
+  "private": true,
+  "description": "Delete your 2 or more days ago tweets Automatically.",
+  "type": "module",
+  "engines": {
+    "node": ">=24.2"
+  },
   "scripts": {
-    "lint": "eslint . --ext .ts",
-    "start": "ts-node src/index.ts",
-    "test": "testyts"
+    "check": "biome check .",
+    "typecheck": "tsc",
+    "start": "node --env-file-if-exists=.env src/index.ts",
+    "test": "node --test 'src/**/*.test.ts'"
   },
   "repository": {
-    "url": "takanakahiko/tweet-deleter",
+    "url": "https://github.com/75asa/tweet-deleter",
     "type": "git"
   },
   "author": "takanakahiko<takanakahiko@gmail.com>",
   "license": "MIT",
-  "devDependencies": {
-    "@types/node": "^14.14.31",
-    "@types/twit": "^2.2.21",
-    "@typescript-eslint/eslint-plugin": "^4.15.2",
-    "@typescript-eslint/parser": "^4.15.2",
-    "eslint": "^7.20.0",
-    "testyts": "^1.4.0",
-    "ts-node": "^7.0.1",
-    "twitter-d": "^0.2.1",
-    "typescript": "^3.1.4"
-  },
   "dependencies": {
-    "big-integer": "^1.6.42",
-    "dotenv": "^10.0.0",
     "twit": "^2.2.11"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^24.19.0",
+    "@types/twit": "^2.2.35",
+    "twitter-d": "^0.6.0",
+    "typescript": "^7.0.2"
   }
 }
