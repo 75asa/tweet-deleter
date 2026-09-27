@@ -2,7 +2,7 @@
   "name": "post-deleter",
   "version": "0.0.0",
   "private": true,
-  "description": "Delete your 2 or more days ago tweets Automatically.",
+  "description": "Automatically delete your old posts on X.",
   "type": "module",
   "engines": {
     "node": ">=24.2"
