@@ -54,9 +54,8 @@ test("keep_by_text", () => {
 });
 
 test("keep_by_date", () => {
-  const status: Status = { ...baseStatus, full_text: "hogehuga" };
-  const setting: Setting = { ...baseSetting, keepTexts: [/hoge/] };
+  const status: Status = { ...baseStatus, created_at: new Date().toString() };
   const boundaryDate = new Date(Date.now() - 1000 * 10); // 10秒ぐらい前
 
-  assert.equal(is消したい(status, setting, boundaryDate), false);
+  assert.equal(is消したい(status, baseSetting, boundaryDate), false);
 });
