@@ -81,19 +81,26 @@ export interface RunDeps {
   logger?: Logger;
 }
 
+// Kept in the step summary / log so a failing post is visible without
+// flooding either with an unbounded list.
+const MAX_FAILED_IDS_LOGGED = 20;
+
 export interface RunSummary {
   fetchedCount: number;
   deletedCount: number;
   alreadyDeletedCount: number;
   skippedForRateLimit: number;
   skippedForCap: number;
+  failedCount: number;
+  /** Up to `MAX_FAILED_IDS_LOGGED` ids; see `failedCount` for the true total. */
+  failedIds: string[];
   apiCallCount: number;
   estimatedCostUsd: number;
   dryRun: boolean;
   fullScan: boolean;
 }
 
-type RemoveOutcome = "deleted" | "already_deleted" | "gave_up";
+type RemoveOutcome = "deleted" | "already_deleted" | "gave_up" | "failed";
 
 const removeWithRetry = async (
   client: XClient,
@@ -112,7 +119,8 @@ const removeWithRetry = async (
 
   let apiCalls = 0;
   // One retry after waiting out the rate limit reset; if we're still
-  // rate-limited (or the wait would be too long) we stop for this run.
+  // rate-limited (or the wait would be too long, or we don't know the reset
+  // time at all) we stop for this run.
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = await action();
     apiCalls++;
@@ -124,7 +132,18 @@ const removeWithRetry = async (
       return { outcome: "already_deleted", apiCalls };
     }
     if (result.status === "failed") {
-      throw new Error(`Failed to remove ${label}: ${String(result.error)}`);
+      // Don't abort the whole run over one bad post - record it and move on
+      // (see RunSummary.failedCount / failedIds); main() fails the process
+      // afterwards so it's still visible, but the next post still gets a
+      // chance to be deleted (and this one gets tried again tomorrow).
+      logger.log(`[FAILED] ${label}: ${String(result.error)}`);
+      return { outcome: "failed", apiCalls };
+    }
+    if (!result.resetAt) {
+      logger.log(
+        `[RATE LIMITED] giving up on ${label} for this run (reset time unknown)`,
+      );
+      return { outcome: "gave_up", apiCalls };
     }
     const waitMs = result.resetAt.getTime() - Date.now();
     if (attempt === 1 || waitMs > MAX_RATE_LIMIT_WAIT_MS) {
@@ -193,11 +212,19 @@ export const run = async ({
     paginationToken = page.nextToken;
   } while (paginationToken);
 
-  const statusesToDelete = fetched.filter((status) =>
-    is消したい(status, setting, boundaryDate),
-  );
-  const toDelete = statusesToDelete.slice(0, setting.maxDeletes);
-  const skippedForCap = statusesToDelete.length - toDelete.length;
+  // The timeline comes back newest-first. If there are more eligible posts
+  // than MAX_DELETES allows, we must delete the *oldest* ones first: they're
+  // the ones closest to falling out of the LOOKBACK_DAYS window (and staying
+  // undeleted forever). Capping the newest-first list instead would silently
+  // protect the oldest posts from ever being picked up again.
+  const oldestFirst = [...fetched]
+    .filter((status) => is消したい(status, setting, boundaryDate))
+    .sort(
+      (a, b) =>
+        new Date(a.created_at).valueOf() - new Date(b.created_at).valueOf(),
+    );
+  const toDelete = oldestFirst.slice(0, setting.maxDeletes);
+  const skippedForCap = oldestFirst.length - toDelete.length;
 
   if (setting.dryRun) {
     for (const status of toDelete) {
@@ -211,6 +238,8 @@ export const run = async ({
       alreadyDeletedCount: 0,
       skippedForRateLimit: 0,
       skippedForCap,
+      failedCount: 0,
+      failedIds: [],
       apiCallCount,
       estimatedCostUsd: fetched.length * OWNED_READ_COST_USD,
       dryRun: true,
@@ -221,6 +250,8 @@ export const run = async ({
   let deletedCount = 0;
   let alreadyDeletedCount = 0;
   let skippedForRateLimit = 0;
+  let failedCount = 0;
+  const failedIds: string[] = [];
   for (let i = 0; i < toDelete.length; i++) {
     const status = toDelete[i];
     const { outcome, apiCalls } = await removeWithRetry(
@@ -235,6 +266,10 @@ export const run = async ({
       deletedCount++;
     } else if (outcome === "already_deleted") {
       alreadyDeletedCount++;
+    } else if (outcome === "failed") {
+      failedCount++;
+      if (failedIds.length < MAX_FAILED_IDS_LOGGED) failedIds.push(status.id);
+      // continue with the next post rather than aborting the whole run
     } else {
       skippedForRateLimit = toDelete.length - i;
       break;
@@ -249,6 +284,8 @@ export const run = async ({
     alreadyDeletedCount,
     skippedForRateLimit,
     skippedForCap,
+    failedCount,
+    failedIds,
     apiCallCount,
     estimatedCostUsd:
       fetched.length * OWNED_READ_COST_USD + deletedCount * DELETE_COST_USD,
@@ -268,11 +305,20 @@ const writeStepSummary = async (summary: RunSummary): Promise<void> => {
     `- already gone (skipped): ${summary.alreadyDeletedCount}`,
     `- skipped (rate limited): ${summary.skippedForRateLimit}`,
     `- skipped (MAX_DELETES cap): ${summary.skippedForCap}`,
+    `- failed: ${summary.failedCount}`,
     `- dry run: ${summary.dryRun}`,
     `- full scan: ${summary.fullScan}`,
     `- API calls: ${summary.apiCallCount}`,
     `- estimated cost: $${summary.estimatedCostUsd.toFixed(3)}`,
   ];
+  if (summary.failedCount > 0) {
+    const shown = summary.failedIds.join(", ");
+    const more =
+      summary.failedCount > summary.failedIds.length
+        ? ` (and ${summary.failedCount - summary.failedIds.length} more)`
+        : "";
+    lines.push(`- failed post ids: ${shown}${more}`);
+  }
   if (summary.skippedForCap > 0 || summary.skippedForRateLimit > 0) {
     lines.push(
       "",
@@ -280,6 +326,14 @@ const writeStepSummary = async (summary: RunSummary): Promise<void> => {
       "> Some posts were skipped (MAX_DELETES cap or rate limiting) and may age out of the" +
         " `LOOKBACK_DAYS` window before the next scheduled run. Consider running this workflow" +
         " manually with `full_scan` enabled (try `dry_run` first) to catch up.",
+    );
+  }
+  if (summary.failedCount > 0) {
+    lines.push(
+      "",
+      "> [!WARNING]",
+      "> Some posts failed to be removed (see the ids above and the job log for details). " +
+        "The workflow run is marked as failed; these posts will be retried on the next run.",
     );
   }
   lines.push("");
@@ -294,11 +348,19 @@ const main = async () => {
     console.log(
       `[SUMMARY] fetched=${summary.fetchedCount} deleted=${summary.deletedCount} ` +
         `alreadyDeleted=${summary.alreadyDeletedCount} skippedForRateLimit=${summary.skippedForRateLimit} ` +
-        `skippedForCap=${summary.skippedForCap} apiCalls=${summary.apiCallCount} ` +
-        `estimatedCostUsd=${summary.estimatedCostUsd.toFixed(3)} dryRun=${summary.dryRun} ` +
-        `fullScan=${summary.fullScan}`,
+        `skippedForCap=${summary.skippedForCap} failed=${summary.failedCount} ` +
+        `apiCalls=${summary.apiCallCount} estimatedCostUsd=${summary.estimatedCostUsd.toFixed(3)} ` +
+        `dryRun=${summary.dryRun} fullScan=${summary.fullScan}`,
     );
+    if (summary.failedIds.length > 0) {
+      console.log(`[SUMMARY] failed post ids: ${summary.failedIds.join(", ")}`);
+    }
     await writeStepSummary(summary);
+    // Set after the summary is written, so a failure is still fully
+    // reported even though it also fails the workflow run.
+    if (summary.failedCount > 0) {
+      process.exitCode = 1;
+    }
   } catch (error) {
     console.error(error);
     process.exitCode = 1;

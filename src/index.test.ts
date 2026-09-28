@@ -298,6 +298,38 @@ test("run: caps deletions at maxDeletes", async () => {
   assert.equal(summary.skippedForCap, 1);
 });
 
+test("run: MAX_DELETES cap processes the oldest eligible posts first, not the newest", async () => {
+  const oldest = new Date("2020-01-01T00:00:00.000Z");
+  const middle = new Date("2020-01-02T00:00:00.000Z");
+  const newest = new Date("2020-01-03T00:00:00.000Z");
+  const client = new FakeXClient({
+    // The API returns the timeline newest-first.
+    pages: [
+      {
+        tweets: [
+          statusWithId("newest", newest),
+          statusWithId("middle", middle),
+          statusWithId("oldest", oldest),
+        ],
+      },
+    ],
+  });
+  const setting: Setting = { ...baseSetting, maxDeletes: 2 };
+
+  const summary = await run({
+    client,
+    setting,
+    logger: noopLogger,
+    sleep: noopSleep,
+  });
+
+  // The oldest two are deleted; the newest is left for next time (it's the
+  // furthest from aging out of LOOKBACK_DAYS).
+  assert.deepEqual(client.deleteCalls, ["oldest", "middle"]);
+  assert.equal(summary.deletedCount, 2);
+  assert.equal(summary.skippedForCap, 1);
+});
+
 test("run: retries once after a 429, then succeeds", async () => {
   const old = new Date("2020-01-01T00:00:00.000Z");
   const resetAt = new Date(Date.now() + 1000);
@@ -375,12 +407,98 @@ test("run: gives up immediately when the rate limit reset is too far away", asyn
   assert.equal(summary.skippedForRateLimit, 1);
 });
 
-test("run: an unexpected delete failure throws (caller should exit 1)", async () => {
+test("run: gives up immediately (no waiting) when a 429 has no reset time", async () => {
   const old = new Date("2020-01-01T00:00:00.000Z");
   const client = new FakeXClient({
     pages: [{ tweets: [statusWithId("1", old)] }],
-    deleteResults: [{ status: "failed", error: new Error("boom") }],
+    deleteResults: [{ status: "rate_limited", resetAt: undefined }],
   });
+  const setting: Setting = { ...baseSetting };
+  let slept = false;
+
+  const summary = await run({
+    client,
+    setting,
+    logger: noopLogger,
+    sleep: async () => {
+      slept = true;
+    },
+  });
+
+  assert.equal(slept, false);
+  assert.equal(summary.deletedCount, 0);
+  assert.equal(summary.skippedForRateLimit, 1);
+  assert.equal(client.deleteCalls.length, 1); // no retry attempted
+});
+
+test("run: a non-404/429 delete failure is recorded, not thrown, and the run continues", async () => {
+  const old = new Date("2020-01-01T00:00:00.000Z");
+  const client = new FakeXClient({
+    pages: [{ tweets: [statusWithId("1", old), statusWithId("2", old)] }],
+    deleteResults: [
+      { status: "failed", error: new Error("boom") },
+      { status: "deleted" },
+    ],
+  });
+  const setting: Setting = { ...baseSetting };
+  const logs: string[] = [];
+
+  const summary = await run({
+    client,
+    setting,
+    logger: { log: (m) => logs.push(m) },
+    sleep: noopSleep,
+  });
+
+  // Both posts were attempted - the failure on "1" didn't stop "2".
+  assert.deepEqual(client.deleteCalls, ["1", "2"]);
+  assert.equal(summary.deletedCount, 1);
+  assert.equal(summary.failedCount, 1);
+  assert.deepEqual(summary.failedIds, ["1"]);
+  assert.ok(logs.some((l) => l.includes("[FAILED]") && l.includes("boom")));
+});
+
+test("run: failedIds is capped but failedCount reflects the true total", async () => {
+  const old = new Date("2020-01-01T00:00:00.000Z");
+  const failureCount = 22;
+  const tweets = Array.from({ length: failureCount }, (_, i) =>
+    statusWithId(`fail-${i}`, old),
+  );
+  const client = new FakeXClient({
+    pages: [{ tweets }],
+    deleteResults: tweets.map(() => ({
+      status: "failed" as const,
+      error: new Error("boom"),
+    })),
+  });
+  const setting: Setting = { ...baseSetting, maxDeletes: failureCount };
+
+  const summary = await run({
+    client,
+    setting,
+    logger: noopLogger,
+    sleep: noopSleep,
+  });
+
+  assert.equal(summary.failedCount, failureCount);
+  assert.equal(summary.failedIds.length, 20);
+});
+
+test("run: a fetch error (e.g. GET /2/users/me) still throws", async () => {
+  const client: XClient = {
+    async getMyUserId(): Promise<string> {
+      throw new Error("network down");
+    },
+    async fetchTweetsPage(): Promise<FetchTweetsPage> {
+      throw new Error("unused");
+    },
+    async deleteTweet(): Promise<DeleteTweetResult> {
+      throw new Error("unused");
+    },
+    async unretweet(): Promise<DeleteTweetResult> {
+      throw new Error("unused");
+    },
+  };
   const setting: Setting = { ...baseSetting };
 
   await assert.rejects(() =>
