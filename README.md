@@ -18,10 +18,13 @@ Automatically delete your old posts on X.
 
 ## How it works
 
-1. A scheduled GitHub Actions workflow runs daily at 0:00 JST.
+1. A scheduled GitHub Actions workflow runs daily, triggered at 15:00 UTC (0:00 JST the next day).
 2. It fetches your recent posts through the X API v2 (only the `LOOKBACK_DAYS` window, to keep read costs low).
 3. It deletes the ones older than the deletion boundary, skipping posts that match your keep rules. Retweets are un-retweeted.
 4. Counts and the estimated API cost are written to the job summary. It doesn't post anything to X.
+
+> [!NOTE]
+> The deletion boundary is midnight JST, but **two** calendar days before the run, not one. The run's `now` (15:00 UTC) lands exactly on the JST day rollover, so a post gets roughly a 2-day grace period after being posted, not 1, before it's eligible for deletion.
 
 ## Requirements
 
@@ -85,13 +88,14 @@ To keep another post, just edit this file (you can do it from the GitHub web UI)
 | --- | --- | --- | --- |
 | `CONSUMER_KEY` / `CONSUMER_SECRET` / `ACCESS_TOKEN` / `ACCESS_TOKEN_SECRET` | yes | - | OAuth 1.0a user context credentials from the X Developer Console |
 | `X_USER_ID` | no | - | Your numeric X user id. When set, skips the `GET /2/users/me` call |
-| `LOOKBACK_DAYS` | no | `7` | How many days before the deletion boundary to fetch posts from |
-| `FULL_SCAN` | no | unset | When set, fetches the full available history (up to the last 3200 posts) instead of just the lookback window. Use for a one-off catch-up run |
+| `LOOKBACK_DAYS` | no | `7` | How many days before the deletion boundary to fetch posts from (the boundary itself trails the scheduled run by about 2 days, not 1 - see [How it works](#how-it-works)) |
+| `FULL_SCAN` | no | `false` | `1`/`true` fetches the full available history (up to the last 3200 posts) instead of just the lookback window. Use for a one-off catch-up run |
 | `MAX_DELETES` | no | `50` | Upper bound on how many posts are deleted in a single run |
-| `DRY_RUN` | no | unset | When set, only logs the posts that would be deleted |
+| `DRY_RUN` | no | `false` | `1`/`true` only logs the posts that would be deleted |
 | `KEEP_RULES_PATH` | no | `keep-rules.json` | Path to the keep rules file |
 
 `LOOKBACK_DAYS` and `MAX_DELETES` must be positive integers; any other value fails the run.
+`FULL_SCAN` and `DRY_RUN` accept `1`/`true` (on) or `0`/`false`/unset (off), case-insensitively; any other value (including things `Boolean(str)` would treat as truthy, like a stray `"false"`) fails the run.
 
 ## Development
 
