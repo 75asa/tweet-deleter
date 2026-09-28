@@ -22,7 +22,9 @@ export type DeleteTweetResult =
   // by the time we tried to remove it (HTTP 404). Not an error: something
   // else (a manual delete, a previous partial run, ...) got there first.
   | { status: "already_deleted" }
-  | { status: "rate_limited"; resetAt: Date }
+  // `resetAt` is omitted when X returns a 429 without rate-limit headers we
+  // can parse - the caller should give up immediately rather than guess.
+  | { status: "rate_limited"; resetAt?: Date }
   | { status: "failed"; error: unknown };
 
 /**
@@ -57,10 +59,15 @@ const toDeleteTweetResult = (error: unknown): DeleteTweetResult => {
     if (error.code === 404) {
       return { status: "already_deleted" };
     }
-    if (error.code === 429 && error.rateLimit) {
+    if (error.code === 429) {
+      // X doesn't always send parseable rate-limit headers on a 429; when it
+      // doesn't, `resetAt` is left undefined so the caller gives up instead
+      // of guessing a wait time.
       return {
         status: "rate_limited",
-        resetAt: new Date(error.rateLimit.reset * 1000),
+        resetAt: error.rateLimit
+          ? new Date(error.rateLimit.reset * 1000)
+          : undefined,
       };
     }
   }
@@ -70,13 +77,19 @@ const toDeleteTweetResult = (error: unknown): DeleteTweetResult => {
 export class TwitterApiV2XClient implements XClient {
   #client: TwitterApi;
 
-  constructor(setting: Setting) {
-    this.#client = new TwitterApi({
-      appKey: setting.consumerKey,
-      appSecret: setting.consumerSecret,
-      accessToken: setting.accessToken,
-      accessSecret: setting.accessTokenSecret,
-    });
+  /**
+   * `client` is only for tests: it lets them substitute a fake
+   * `TwitterApi`-shaped object instead of a real, network-backed one.
+   */
+  constructor(setting: Setting, client?: TwitterApi) {
+    this.#client =
+      client ??
+      new TwitterApi({
+        appKey: setting.consumerKey,
+        appSecret: setting.consumerSecret,
+        accessToken: setting.accessToken,
+        accessSecret: setting.accessTokenSecret,
+      });
   }
 
   async getMyUserId(): Promise<string> {
@@ -105,7 +118,15 @@ export class TwitterApiV2XClient implements XClient {
 
   async deleteTweet(id: string): Promise<DeleteTweetResult> {
     try {
-      await this.#client.v2.deleteTweet(id);
+      const res = await this.#client.v2.deleteTweet(id);
+      // A 200 response doesn't guarantee success - check the payload too, so
+      // we don't count/bill a delete that X silently didn't perform.
+      if (!res.data.deleted) {
+        return {
+          status: "failed",
+          error: new Error(`X reported deleted: false for post ${id}`),
+        };
+      }
       return { status: "deleted" };
     } catch (error) {
       return toDeleteTweetResult(error);
@@ -117,7 +138,17 @@ export class TwitterApiV2XClient implements XClient {
     sourceTweetId: string,
   ): Promise<DeleteTweetResult> {
     try {
-      await this.#client.v2.unretweet(userId, sourceTweetId);
+      const res = await this.#client.v2.unretweet(userId, sourceTweetId);
+      // A successful unretweet reports retweeted: false; if it's still
+      // true, X didn't actually remove the Retweet.
+      if (res.data.retweeted) {
+        return {
+          status: "failed",
+          error: new Error(
+            `X reported retweeted: true after unretweet for source ${sourceTweetId}`,
+          ),
+        };
+      }
       return { status: "deleted" };
     } catch (error) {
       return toDeleteTweetResult(error);
