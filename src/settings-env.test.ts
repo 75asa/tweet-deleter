@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { settings } from "./settings.ts";
 
-const ENV_KEYS = ["LOOKBACK_DAYS", "MAX_DELETES"] as const;
+const ENV_KEYS = [
+  "LOOKBACK_DAYS",
+  "MAX_DELETES",
+  "FULL_SCAN",
+  "DRY_RUN",
+] as const;
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -54,4 +59,43 @@ test("settings: MAX_DELETES throws on zero", () => {
 test("settings: MAX_DELETES throws on a negative value", () => {
   process.env.MAX_DELETES = "-1";
   assert.throws(() => settings(), /Invalid MAX_DELETES/);
+});
+
+test("settings: FULL_SCAN/DRY_RUN default to false when unset or empty", () => {
+  assert.equal(settings().fullScan, false);
+  assert.equal(settings().dryRun, false);
+  process.env.FULL_SCAN = "";
+  process.env.DRY_RUN = "";
+  assert.equal(settings().fullScan, false);
+  assert.equal(settings().dryRun, false);
+});
+
+test("settings: FULL_SCAN/DRY_RUN are true for '1' or 'true' (any case)", () => {
+  process.env.FULL_SCAN = "1";
+  process.env.DRY_RUN = "true";
+  assert.equal(settings().fullScan, true);
+  assert.equal(settings().dryRun, true);
+
+  process.env.FULL_SCAN = "TRUE";
+  assert.equal(settings().fullScan, true);
+});
+
+test("settings: FULL_SCAN/DRY_RUN are false for '0' or 'false' (any case) - not truthy like Boolean(str)", () => {
+  process.env.FULL_SCAN = "0";
+  process.env.DRY_RUN = "false";
+  assert.equal(settings().fullScan, false);
+  assert.equal(settings().dryRun, false);
+
+  process.env.DRY_RUN = "FALSE";
+  assert.equal(settings().dryRun, false);
+});
+
+test("settings: FULL_SCAN throws on an unrecognized value", () => {
+  process.env.FULL_SCAN = "yes";
+  assert.throws(() => settings(), /Invalid FULL_SCAN/);
+});
+
+test("settings: DRY_RUN throws on an unrecognized value", () => {
+  process.env.DRY_RUN = "yes";
+  assert.throws(() => settings(), /Invalid DRY_RUN/);
 });

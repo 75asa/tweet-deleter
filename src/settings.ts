@@ -119,6 +119,24 @@ const parsePositiveInt = (
   return Number.parseInt(value, 10);
 };
 
+// Same "fail loudly on nonsense" philosophy as parsePositiveInt: an unset or
+// empty value means "off" (matches the workflow passing `''`), "1"/"true"
+// means on and "0"/"false" means off (case-insensitive), and anything else
+// is a misconfiguration - notably `Boolean(str)` would treat "false"/"0" as
+// truthy, which is the opposite of what someone setting that value means.
+const parseBooleanEnv = (
+  envName: string,
+  value: string | undefined,
+): boolean => {
+  if (value === undefined || value === "") return false;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true") return true;
+  if (normalized === "0" || normalized === "false") return false;
+  throw new Error(
+    `Invalid ${envName}: "${value}" (expected "1"/"true", "0"/"false", or unset)`,
+  );
+};
+
 export function settings(): Setting {
   const keepRules = loadKeepRules();
   return {
@@ -138,7 +156,7 @@ export function settings(): Setting {
       process.env.MAX_DELETES,
       DEFAULT_MAX_DELETES,
     ),
-    fullScan: Boolean(process.env.FULL_SCAN),
-    dryRun: Boolean(process.env.DRY_RUN),
+    fullScan: parseBooleanEnv("FULL_SCAN", process.env.FULL_SCAN),
+    dryRun: parseBooleanEnv("DRY_RUN", process.env.DRY_RUN),
   };
 }
