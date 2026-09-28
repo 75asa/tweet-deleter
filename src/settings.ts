@@ -9,6 +9,16 @@ export interface Setting {
   keepTags: string[];
   exceptionIds: string[];
   keepTexts: RegExp[];
+  /** Own user id. When set (`X_USER_ID`), skips the `GET /2/users/me` call. */
+  userId?: string;
+  /** How many days before the deletion boundary to start fetching from. */
+  lookbackDays: number;
+  /** Upper bound on how many tweets are deleted in a single run. */
+  maxDeletes: number;
+  /** Skip the `start_time` window and fetch the full available history. */
+  fullScan: boolean;
+  /** Log what would be deleted instead of actually deleting. */
+  dryRun: boolean;
 }
 
 type KeepRules = Pick<Setting, "keepTags" | "exceptionIds" | "keepTexts">;
@@ -81,6 +91,52 @@ export function loadKeepRules(
   };
 }
 
+// X API v2 delete (OAuth 1.0a user context) is informally rate-limited to
+// roughly 50 requests / 15 minutes. Defaulting to 50 keeps a single daily run
+// inside one rate-limit window, and caps the worst-case per-run cost at
+// 50 * $0.010 = $0.50 (see docs.x.com/x-api/getting-started/pricing).
+const DEFAULT_MAX_DELETES = 50;
+
+// A week of headroom in case a run is skipped (e.g. Actions outage): posts
+// created in that window are still picked up on the next successful run.
+const DEFAULT_LOOKBACK_DAYS = 7;
+
+// An unset/empty value falls back to `fallback`, but any other value that
+// isn't a positive integer is a misconfiguration and must fail loudly rather
+// than silently keep the default (e.g. `MAX_DELETES=0` should not quietly
+// mean "use the default of 50").
+const parsePositiveInt = (
+  envName: string,
+  value: string | undefined,
+  fallback: number,
+): number => {
+  if (value === undefined || value === "") return fallback;
+  if (!/^\d+$/.test(value.trim()) || Number.parseInt(value, 10) <= 0) {
+    throw new Error(
+      `Invalid ${envName}: "${value}" (expected a positive integer)`,
+    );
+  }
+  return Number.parseInt(value, 10);
+};
+
+// Same "fail loudly on nonsense" philosophy as parsePositiveInt: an unset or
+// empty value means "off" (matches the workflow passing `''`), "1"/"true"
+// means on and "0"/"false" means off (case-insensitive), and anything else
+// is a misconfiguration - notably `Boolean(str)` would treat "false"/"0" as
+// truthy, which is the opposite of what someone setting that value means.
+const parseBooleanEnv = (
+  envName: string,
+  value: string | undefined,
+): boolean => {
+  if (value === undefined || value === "") return false;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true") return true;
+  if (normalized === "0" || normalized === "false") return false;
+  throw new Error(
+    `Invalid ${envName}: "${value}" (expected "1"/"true", "0"/"false", or unset)`,
+  );
+};
+
 export function settings(): Setting {
   const keepRules = loadKeepRules();
   return {
@@ -89,5 +145,18 @@ export function settings(): Setting {
     accessToken: process.env.ACCESS_TOKEN || "",
     accessTokenSecret: process.env.ACCESS_TOKEN_SECRET || "",
     ...keepRules,
+    userId: process.env.X_USER_ID || undefined,
+    lookbackDays: parsePositiveInt(
+      "LOOKBACK_DAYS",
+      process.env.LOOKBACK_DAYS,
+      DEFAULT_LOOKBACK_DAYS,
+    ),
+    maxDeletes: parsePositiveInt(
+      "MAX_DELETES",
+      process.env.MAX_DELETES,
+      DEFAULT_MAX_DELETES,
+    ),
+    fullScan: parseBooleanEnv("FULL_SCAN", process.env.FULL_SCAN),
+    dryRun: parseBooleanEnv("DRY_RUN", process.env.DRY_RUN),
   };
 }

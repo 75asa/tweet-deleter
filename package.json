@@ -19,14 +19,12 @@
   },
   "author": "takanakahiko<takanakahiko@gmail.com>",
   "license": "MIT",
-  "dependencies": {
-    "twit": "^2.2.11"
-  },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
     "@types/node": "^24.19.0",
-    "@types/twit": "^2.2.35",
-    "twitter-d": "^0.6.0",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "twitter-api-v2": "^1.29.1"
   }
 }
